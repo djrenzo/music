@@ -78,6 +78,16 @@ jobs:
           grep -qF "$BASE/favicon.svg" plugins/head.ts \
             || { echo "::error::Patch failed for favicon"; exit 1; }
 
+      # Name shown for this client in the Subsonic server (e.g. Navidrome's
+      # player list). Override with the CLIENT_NAME repository variable.
+      - name: Set Subsonic client name
+        env:
+          CLIENT_NAME: ${{ vars.CLIENT_NAME || 'GithubPlayer' }}
+        run: |
+          sed -i "s#c: 'web',#c: '$CLIENT_NAME',#" composables/useApi/utils.ts
+          grep -qF "c: '$CLIENT_NAME'," composables/useApi/utils.ts \
+            || { echo "::error::Could not set client name"; exit 1; }
+
       - name: Install dependencies
         run: npm ci
 
@@ -89,14 +99,27 @@ jobs:
         env:
           SPA_MODE: 'true'
           NUXT_APP_BASE_URL: ${{ steps.pages.outputs.base_path }}/
-          # Optional settings: set these as repository variables
+          # Optional app defaults: set these as repository variables
           # (Settings → Secrets and variables → Actions → Variables).
-          MAIN_APP_TITLE: ${{ vars.MAIN_APP_TITLE }}
+          # They are baked in at build time, so a change needs a re-deploy.
+          # The README's NUXT_PUBLIC_* names are runtime overrides for the
+          # Docker image; the unprefixed names used here are read by
+          # nuxt.config.ts and also reach the PWA manifest (app name).
           SERVER_URL: ${{ vars.SERVER_URL }}
+          MAIN_APP_TITLE: ${{ vars.MAIN_APP_TITLE }}
+          LOAD_SIZE: ${{ vars.LOAD_SIZE }}
+          IMAGE_SIZE: ${{ vars.IMAGE_SIZE }}
+          ENABLE_QUEUE_SYNC: ${{ vars.ENABLE_QUEUE_SYNC }}
+          BITRATE: ${{ vars.BITRATE }}
           THEME: ${{ vars.THEME }}
           LAYOUT: ${{ vars.LAYOUT }}
+          SCROBBLE_ENABLED: ${{ vars.SCROBBLE_ENABLED }}
           SHOW_PODCASTS: ${{ vars.SHOW_PODCASTS }}
           SHOW_RADIO_STATIONS: ${{ vars.SHOW_RADIO_STATIONS }}
+          DELETE_PODCAST_ON_END: ${{ vars.DELETE_PODCAST_ON_END }}
+          CROSSFADE_ENABLED: ${{ vars.CROSSFADE_ENABLED }}
+          CROSSFADE_DURATION: ${{ vars.CROSSFADE_DURATION }}
+          REPLAY_GAIN_MODE: ${{ vars.REPLAY_GAIN_MODE }}
 
       - name: Add SPA fallback
         run: |
