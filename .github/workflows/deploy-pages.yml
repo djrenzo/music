@@ -48,45 +48,18 @@ jobs:
         id: pages
         uses: actions/configure-pages@v5
 
-      # Upstream assumes the app is served from "/". A project Pages site is
-      # served from "/<repo>/", so prefix the hardcoded root paths.
-      - name: Patch hardcoded root paths
+      - name: Checkout this repo (patch scripts)
+        uses: actions/checkout@v4
+        with:
+          path: .deploy
+
+      # Sub-path support, client name, audio/service-worker and click fixes.
+      # See .github/scripts/patch-upstream.sh for details.
+      - name: Patch upstream
         env:
           BASE: ${{ steps.pages.outputs.base_path }}
-        run: |
-          if [ -z "$BASE" ]; then
-            echo "Site is served from the domain root; no patching needed."
-            exit 0
-          fi
-          sed -i \
-            -e "s#scope: '/'#scope: '$BASE/'#" \
-            -e "s#start_url: '/'#start_url: '$BASE/'#" \
-            -e "s#navigateFallback: '/'#navigateFallback: '$BASE/'#" \
-            -e "s#baseUrl: '/'#baseUrl: '$BASE/'#" \
-            -e "s#src: \`/pwa-#src: \`$BASE/pwa-#" \
-            -e "s#^    url,\$#    url: '$BASE' + url,#" \
-            config/pwa.config.ts
-          sed -i "s#href: '/favicon.svg'#href: '$BASE/favicon.svg'#" plugins/head.ts
-
-          # Fail loudly if upstream changed and a pattern no longer matched.
-          for pattern in "scope: '$BASE/'" "start_url: '$BASE/'" \
-                         "navigateFallback: '$BASE/'" "baseUrl: '$BASE/'" \
-                         "$BASE/pwa-" "url: '$BASE' + url"; do
-            grep -qF "$pattern" config/pwa.config.ts \
-              || { echo "::error::Patch failed for: $pattern"; exit 1; }
-          done
-          grep -qF "$BASE/favicon.svg" plugins/head.ts \
-            || { echo "::error::Patch failed for favicon"; exit 1; }
-
-      # Name shown for this client in the Subsonic server (e.g. Navidrome's
-      # player list). Override with the CLIENT_NAME repository variable.
-      - name: Set Subsonic client name
-        env:
           CLIENT_NAME: ${{ vars.CLIENT_NAME || 'GithubPlayer' }}
-        run: |
-          sed -i "s#c: 'web',#c: '$CLIENT_NAME',#" composables/useApi/utils.ts
-          grep -qF "c: '$CLIENT_NAME'," composables/useApi/utils.ts \
-            || { echo "::error::Could not set client name"; exit 1; }
+        run: bash .deploy/.github/scripts/patch-upstream.sh
 
       - name: Install dependencies
         run: npm ci
