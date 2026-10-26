@@ -88,4 +88,53 @@ perl -0pi -e '
     or die "startCrossfade anchor not found\n";
 ' "$PLAYER" || fail "Fade-in patch failed"
 
+# --- 5. Faster artist pages ----------------------------------------------
+# Upstream makes the 4 artist requests one after another. Three of them can
+# be slow (Navidrome asks Last.fm/Spotify etc.), so the waits add up. Run
+# them at the same time; only top songs has to wait for the artist's name.
+export ARTIST_FETCH='const artistRequest = fetchFn("/getArtist", {
+    query: {
+      id,
+    },
+  });
+
+  const [
+    { data: artistInfo },
+    { data: artistData },
+    { data: similarSongs },
+    { data: topSongs },
+  ] = await Promise.all([
+    fetchFn("/getArtistInfo2", {
+      query: {
+        id,
+      },
+    }),
+    artistRequest,
+    fetchFn("/getSimilarSongs2", {
+      query: {
+        count: PREVIEW_TRACK_COUNT,
+        id,
+      },
+    }),
+    artistRequest.then(({ data }) =>
+      data
+        ? fetchFn("/getTopSongs", {
+            query: {
+              artist: data.artist?.name || "",
+              count: PREVIEW_TRACK_COUNT,
+            },
+          })
+        : { data: null },
+    ),
+  ]);
+
+  if (!artistInfo || !artistData) {
+    return null;
+  }
+'
+perl -0pi -e '
+  s{const \{ data: artistInfo \} = await fetchFn\(.*?(?=\n  const mergedArtists)}{$ENV{ARTIST_FETCH}}s
+    or die "artist fetch anchor not found\n";
+' utils/api/artist.ts || fail "Artist page patch failed"
+
 echo "Upstream patched."
